@@ -9,8 +9,10 @@ on:
 jobs:
   laravel-tests:
 
-    runs-on: windows-latest  # Change to Windows environment
+    runs-on: [self-hosted, windows]  # Use self-hosted runner with Windows
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        path: C:\inetpub\vhosts\kami  # This specifies where to pull the code
