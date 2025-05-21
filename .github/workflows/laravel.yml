@@ -1,18 +1,18 @@
-name: Laravel
+name: Deploy to Windows Server
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    branches:
+      - master
 
 jobs:
-  laravel-tests:
-
-    runs-on: [self-hosted, windows]  # Use self-hosted runner with Windows
-
+  deploy:
+    runs-on: self-hosted
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        path: C:\inetpub\vhosts\kami  # This specifies where to pull the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Pull latest code
+        run: |
+          cd C:\inetpub\vhosts\kami
+          git pull origin master
