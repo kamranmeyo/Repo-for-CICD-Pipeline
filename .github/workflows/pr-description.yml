@@ -1,0 +1,98 @@
+name: Auto Generate PR Description
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - master
+
+jobs:
+  update-pr-description:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR information
+        id: pr-info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            return {
+              base: pr.base.sha,
+              head: pr.head.sha,
+              title: pr.title,
+              number: pr.number
+            };
+
+      - name: Generate PR description
+        id: generate-description
+        run: |
+          # Get PR information from GitHub API
+          PR_INFO=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.number }}")
+          
+          BASE_SHA=$(echo "$PR_INFO" | jq -r '.base.sha')
+          HEAD_SHA=$(echo "$PR_INFO" | jq -r '.head.sha')
+          
+          # Generate description using our script
+          DESCRIPTION=$(./.github/scripts/generate-pr-description.sh "$BASE_SHA" "$HEAD_SHA")
+          
+          # Add branch info
+          DESCRIPTION="$DESCRIPTION"$'\n'"*Triggered by push to branch: \`${{ github.event.pull_request.head.ref }}\`*"
+          
+          # Save description to output
+          echo "DESCRIPTION<<EOF" >> $GITHUB_OUTPUT
+          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update PR description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const description = `${{ steps.generate-description.outputs.DESCRIPTION }}`;
+            
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              body: description
+            });
+            
+            console.log('PR description updated successfully!');
+
+      - name: Add comment about auto-generation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check if we already have an auto-generation comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const autoComment = comments.find(comment => 
+              comment.body.includes('🤖 PR Description Auto-Generated')
+            );
+            
+            if (!autoComment) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🤖 **PR Description Auto-Generated**\n\nI've automatically updated this PR description based on the commits and changes. The description will be refreshed whenever new commits are pushed to this branch.\n\n*This is an automated message.*`
+              });
+            }
