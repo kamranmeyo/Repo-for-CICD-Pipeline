@@ -1,0 +1,172 @@
+name: Simple PR Description Generator
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  update-pr-description:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened' || github.event.action == 'synchronize'
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate and update PR description
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { execSync } = require('child_process');
+            
+            try {
+              // Get PR information
+              const pr = context.payload.pull_request;
+              const baseSha = pr.base.sha;
+              const headSha = pr.head.sha;
+              
+              console.log(`Generating description for PR #${pr.number}`);
+              console.log(`Base SHA: ${baseSha}, Head SHA: ${headSha}`);
+              
+              // Get commit messages between base and head
+              let commitMessages = '';
+              try {
+                commitMessages = execSync(`git log --oneline ${baseSha}..${headSha}`, { 
+                  encoding: 'utf-8',
+                  cwd: process.env.GITHUB_WORKSPACE 
+                }).trim();
+              } catch (error) {
+                console.log('Could not get commit messages:', error.message);
+              }
+              
+              // Get changed files
+              let changedFiles = '';
+              try {
+                changedFiles = execSync(`git diff --name-only ${baseSha}..${headSha}`, { 
+                  encoding: 'utf-8',
+                  cwd: process.env.GITHUB_WORKSPACE 
+                }).trim();
+              } catch (error) {
+                console.log('Could not get changed files:', error.message);
+              }
+              
+              // Get diff stats
+              let diffStats = '';
+              try {
+                diffStats = execSync(`git diff --stat ${baseSha}..${headSha}`, { 
+                  encoding: 'utf-8',
+                  cwd: process.env.GITHUB_WORKSPACE 
+                }).trim();
+              } catch (error) {
+                console.log('Could not get diff stats:', error.message);
+              }
+              
+              // Generate description
+              let description = `## 🚀 Auto-Generated PR Description\n\n`;
+              
+              // Add summary
+              const commitCount = commitMessages ? commitMessages.split('\n').filter(line => line.trim()).length : 0;
+              const fileCount = changedFiles ? changedFiles.split('\n').filter(line => line.trim()).length : 0;
+              
+              description += `### 📋 Summary\n`;
+              description += `This pull request contains **${commitCount} commit(s)** with changes to **${fileCount} file(s)**.\n\n`;
+              
+              // Add commits section
+              if (commitMessages && commitCount > 0) {
+                description += `### 📝 Commits in this PR\n`;
+                commitMessages.split('\n').forEach(commit => {
+                  if (commit.trim()) {
+                    description += `- ${commit}\n`;
+                  }
+                });
+                description += `\n`;
+              }
+              
+              // Add changed files section
+              if (changedFiles && fileCount > 0) {
+                description += `### 📁 Files Changed\n`;
+                changedFiles.split('\n').forEach(file => {
+                  if (file.trim()) {
+                    const emoji = file.includes('.html') ? '🌐' : 
+                                  file.includes('.css') ? '🎨' :
+                                  file.includes('.js') ? '⚡' :
+                                  file.includes('.yml') || file.includes('.yaml') ? '⚙️' :
+                                  file.includes('.md') ? '📖' :
+                                  file.includes('.json') ? '🔧' : '📄';
+                    description += `- ${emoji} \`${file}\`\n`;
+                  }
+                });
+                description += `\n`;
+              }
+              
+              // Add diff statistics
+              if (diffStats) {
+                description += `### 📊 Change Statistics\n`;
+                description += `\`\`\`\n${diffStats}\n\`\`\`\n\n`;
+              }
+              
+              // Analyze commit messages for categories
+              if (commitMessages) {
+                description += `### 🏷️ Change Categories\n`;
+                const messages = commitMessages.toLowerCase();
+                
+                const categories = [];
+                if (messages.includes('fix') || messages.includes('bug') || messages.includes('error')) {
+                  categories.push('🐛 **Bug Fixes**');
+                }
+                if (messages.includes('feat') || messages.includes('add') || messages.includes('new')) {
+                  categories.push('✨ **New Features**');
+                }
+                if (messages.includes('update') || messages.includes('modify') || messages.includes('improve')) {
+                  categories.push('🔄 **Updates**');
+                }
+                if (messages.includes('refactor') || messages.includes('cleanup') || messages.includes('clean')) {
+                  categories.push('🧹 **Refactoring**');
+                }
+                if (messages.includes('doc') || messages.includes('readme')) {
+                  categories.push('📚 **Documentation**');
+                }
+                if (messages.includes('test') || messages.includes('spec')) {
+                  categories.push('🧪 **Testing**');
+                }
+                if (messages.includes('config') || messages.includes('workflow') || messages.includes('ci') || messages.includes('cd')) {
+                  categories.push('⚙️ **Configuration**');
+                }
+                
+                if (categories.length > 0) {
+                  categories.forEach(category => {
+                    description += `- ${category}\n`;
+                  });
+                  description += `\n`;
+                } else {
+                  description += `- 📝 **General Changes**\n\n`;
+                }
+              }
+              
+              // Add metadata
+              description += `---\n`;
+              description += `🤖 *This description was automatically generated*\n`;
+              description += `📅 *Generated on: ${new Date().toISOString()}*\n`;
+              description += `🌿 *Branch: \`${pr.head.ref}\`*\n`;
+              description += `🎯 *Target: \`${pr.base.ref}\`*`;
+              
+              // Update the PR description
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                body: description
+              });
+              
+              console.log('✅ PR description updated successfully!');
+              
+            } catch (error) {
+              console.error('❌ Error updating PR description:', error);
+              throw error;
+            }
