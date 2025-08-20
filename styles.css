@@ -1,0 +1,50 @@
+/* Styles for the automated PR description demo */
+.pr-automation {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px 0;
+  font-family: 'Arial', sans-serif;
+}
+
+.pr-automation h2 {
+  margin-top: 0;
+  font-size: 1.5em;
+}
+
+.pr-automation ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.pr-automation li {
+  margin: 8px 0;
+  padding-left: 20px;
+  position: relative;
+}
+
+.pr-automation li:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+body {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Arial', sans-serif;
+}
+
+h1 {
+  color: #333;
+  border-bottom: 2px solid #667eea;
+  padding-bottom: 10px;
+}
